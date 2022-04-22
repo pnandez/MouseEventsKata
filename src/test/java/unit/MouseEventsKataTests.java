@@ -6,136 +6,100 @@ import mouse.MouseEventType;
 import mouse.MousePointerCoordinates;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+
+// TODO:
+//  single click
+//     no click, several clicks after a long time, multiples clicks without release?
+// double click
+//     clicks, click + move + click != double click
+// triple click
+//     click + move + click != double click
+// drag
+//       move without press
+// drop
+//       no move
+
+class Listener implements MouseEventListener{
+
+    public List<MouseEventType> events = new ArrayList<>();
+
+
+    @Override
+    public void handleMouseEvent(MouseEventType eventType) {
+        events.add(eventType);
+    }
+}
+
 public class MouseEventsKataTests {
 
-    private Mouse mouse;
-    private SpyEventListener listener;
+    private void simulateOneSingleClick(Mouse m){
+        m.pressLeftButton(System.currentTimeMillis());
+        m.releaseLeftButton(System.currentTimeMillis());
+    }
 
-    class SpyEventListener implements MouseEventListener {
-        public MouseEventType receivedEventType;
-        public boolean wasEventTriggered;
-        public int eventCount;
-
-        @Override
-        public void handleMouseEvent(MouseEventType eventType) {
-            this.receivedEventType = eventType;
-            wasEventTriggered = true;
-            eventCount++;
+    private void simulateTwoSingleClicks(Mouse m){
+        simulateOneSingleClick(m);
+        try {
+            Thread.sleep(501);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
+        simulateOneSingleClick(m);
     }
 
-    // TODO:
-    //  single click
-    //     no click, several clicks after a long time, multiples clicks without release?
-    // double click
-    //     clicks, click + move + click != double click
-    // triple click
-    //     click + move + click != double click
-    // drag
-    //       move without press
-    // drop
-    //       no move
+    private void simulateDoubleClick(Mouse m) {
+        simulateOneSingleClick(m);
+        try {
+            Thread.sleep(20);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        simulateOneSingleClick(m);
+    }
 
-    @Before
-    public void setUp() {
-        mouse = new Mouse();
-        listener = new SpyEventListener();
+
+
+    @Test
+    public void should_detect_a_single_click(){
+        Mouse mouse = new Mouse();
+        Listener listener = new Listener();
         mouse.subscribe(listener);
+
+        simulateOneSingleClick(mouse);
+
+        assertThat(listener.events.get(0)).isEqualTo(MouseEventType.SingleClick);
     }
 
     @Test
-    public void single_click_means_pressing_and_releasing_mouse_button() throws InterruptedException {
-        mouse.pressLeftButton(System.currentTimeMillis());
-        mouse.releaseLeftButton(System.currentTimeMillis() + 10);
+    public void should_detect_two_single_clicks(){
+        Mouse mouse = new Mouse();
+        Listener listener = new Listener();
+        mouse.subscribe(listener);
+        simulateTwoSingleClicks(mouse);
 
-        delaySimulatingHumanUser();
-        assertThat(listener.receivedEventType).isEqualTo(MouseEventType.SingleClick);
+        assertThat(listener.events.get(0)).isEqualTo(MouseEventType.SingleClick);
+        assertThat(listener.events.get(1)).isEqualTo(MouseEventType.SingleClick);
     }
 
     @Test
-    public void single_click_does_not_happen_if_button_is_never_pressed() throws InterruptedException {
-        mouse.releaseLeftButton(System.currentTimeMillis() + 10);
+    public void should_detect_double_click(){
+        Mouse mouse = new Mouse();
+        Listener listener = new Listener();
+        mouse.subscribe(listener);
 
-        delaySimulatingHumanUser();
-        assertThat(listener.wasEventTriggered).isFalse();
+        simulateDoubleClick(mouse);
+
+        assertThat(listener.events.get(listener.events.size()-1)).isEqualTo(MouseEventType.DoubleClick);
     }
 
-    @Test
-    public void button_can_only_be_released_once() throws InterruptedException {
-        mouse.pressLeftButton(System.currentTimeMillis());
-        mouse.releaseLeftButton(System.currentTimeMillis() + 10);
-        mouse.releaseLeftButton(System.currentTimeMillis() + 10);
-        mouse.releaseLeftButton(System.currentTimeMillis() + 10);
 
-        delaySimulatingHumanUser();
-        assertThat(listener.eventCount).isEqualTo(1);
-    }
 
-    @Test
-    public void double_click_happens_when_single_click_is_repetead_quickly() throws InterruptedException {
-        mouse.pressLeftButton(System.currentTimeMillis());
-        mouse.releaseLeftButton(System.currentTimeMillis() + 10);
-        mouse.pressLeftButton(System.currentTimeMillis());
-        mouse.releaseLeftButton(System.currentTimeMillis() + 10);
-
-        delaySimulatingHumanUser();
-        assertThat(listener.receivedEventType).isEqualTo(MouseEventType.DoubleClick);
-        assertThat(listener.eventCount).isEqualTo(1);
-    }
-
-    @Test
-    public void triple_click_happens_when_single_click_is_repetead_quickly() throws InterruptedException {
-        long firstTime = System.currentTimeMillis();
-        mouse.pressLeftButton(firstTime);
-        mouse.releaseLeftButton(firstTime + 10);
-        mouse.pressLeftButton(firstTime + Mouse.clickTimeWindow - 50);
-        mouse.releaseLeftButton(firstTime + Mouse.clickTimeWindow - 5);
-        mouse.pressLeftButton(firstTime + Mouse.clickTimeWindow + 10);
-        mouse.releaseLeftButton(firstTime + Mouse.clickTimeWindow + 20);
-
-        delaySimulatingHumanUser();
-        assertThat(listener.receivedEventType).isEqualTo(MouseEventType.TripleClick);
-        assertThat(listener.eventCount).isEqualTo(1);
-    }
-
-    @Test
-    public void dragging_means_clicking_plus_moving() throws InterruptedException {
-        long firstTime = System.currentTimeMillis();
-        mouse.pressLeftButton(firstTime);
-        mouse.move(new MousePointerCoordinates(100, 100),
-                   new MousePointerCoordinates(200,200),
-                   firstTime + 10);
-
-        assertThat(listener.receivedEventType).isEqualTo(MouseEventType.Drag);
-    }
-
-    @Test
-    public void dropping_means_clicking_plus_moving_plus_releasing() throws InterruptedException {
-        long firstTime = System.currentTimeMillis();
-        mouse.pressLeftButton(firstTime);
-        mouse.move(new MousePointerCoordinates(100, 100),
-                new MousePointerCoordinates(200,200),
-                firstTime + 10);
-        mouse.releaseLeftButton(firstTime + 20);
-
-        assertThat(listener.receivedEventType).isEqualTo(MouseEventType.Drop);
-    }
-
-    @Test
-    public void dragging_means_button_is_currently_pressed() throws InterruptedException {
-        long firstTime = System.currentTimeMillis();
-        mouse.move(new MousePointerCoordinates(100, 100),
-                new MousePointerCoordinates(200,200),
-                firstTime + 10);
-
-        delaySimulatingHumanUser();
-        assertThat(listener.eventCount).isEqualTo(0);
-    }
-
-    private void delaySimulatingHumanUser() throws InterruptedException {
-        Thread.sleep(Mouse.clickTimeWindow + 100);
-    }
 }
